@@ -1,0 +1,659 @@
+services -> snort ->system -> package manager -> available package -> installed packages -> 1> snort 2> lightsquid 3> squid 4> squidguard this done 
+2 step >services -> snort -> add -> wan em 0 ->  alert settings ✅ tick first one -> direct save 
+then go to snort interface -> ✏️<-- tick this on your rule -> wan rules -> category slection :- custom rules 
+rules (
+1) alert udp any 68 -> any 67 (msg: "kali linux detected"; content: "kali", nocase; sid:1000001;)
+2) alert icmp any any -> any any (msg: "large ping packet"; dsize:128;sid:1000003;)
+)
+
+ok now rules done!!!!
+
+now save rules -> go to snort interface -> click on refresh sumbol 
+for pinging from cmd :-ping -l <size> <IP_Address>
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+now proxy squid :- 1>services -> procy server-> users -> add user -> authentication -> local  -> save , general -> tick 1st two boxes ->  proxy interface ->  tick 1> LAN , LOOPBACk -> save
+2> services -> squid guard -> target category -> add -> name -> domain list :- www.insta.com -> at end tick log -> save
+3> grop acl  -> add -> name.....-> in client :- 'your username which you have created ' -> target rules list -> save .
+4> services -> proxy server -> click on restart (top right 2nd button)
+5> services -> squid guard -> general settings -> greenbuttton click apply done
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+_______________________________________________________________________________________________________________________________________________________________________________
+
+Echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+On client’s machine put nameserver 192.168.72.20 in /etc/resolv.conf
+
+Fail2ban
+
+Machine a :
+
+1. Install + start + enable 
+sudo yum install epel-release -y
+sudo yum install fail2ban -y
+sudo systemctl status fail2ban
+cd /etc/fail2ban/
+ ls
+ sudo vim jail.conf
+ cp jail.conf jail.local 
+ cd jail.d/
+  ls
+ sudo vim sshd.local
+
+[sshd]
+enabled=true
+maxretry=5
+bantime=1h
+findtime=3m
+bantime.increment=true
+bantime.factor=2
+
+
+sudo fail2ban-client status
+ sudo systemctl restart fail2ban
+
+On other machine:
+ 
+Ping machine a
+
+Machine a: 
+
+ hostname -I
+ sudo fail2ban-client status sshd
+ sudo fail2ban-client get sshd banip
+ sudo fail2ban-client get sshd banip --with-time
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Snort 
+
+Cd  /etc/snort
+Sudo vim snort.conf
+45  ipvar HOME_NET 192.168.35.0/24
+48  ipvar EXTERNAL_NET !$HOME_NET
+104 var RULE_PATH /etc/snort/rules
+105 var SO_RULE_PATH /etc/snort/so_rules
+106 var PREPROC_RULE_PATH /etc/snort/preproc_rules
+113 var WHITE_LIST_PATH /etc/snort/rules
+114 var BLACK_LIST_PATH /etc/snort/rules
+
+:wq
+
+
+
+Cd  /etc/snort/rules
+Sudo vim local.rules
+
+Alert icmp any any -> any any (msg:"Test ping";sid:1000013;)
+
+Alert udp any any -> any 53 (msg:”LAN searching facebook”;content:”facebook”;nocase;sid:952145;)
+
+alert tcp $EXTERNAL_NET any -> 192.168.74.227 22 (msg:"Test SSH";sid:1000003;)
+
+alert icmp any any -> 192.168.74.227 any (msg:"Test big_data ping";dsize:>128;sid:1000004;)
+
+alert icmp any any -> 192.168.74.227 any (msg:"Ping of Death";detection_filter:track by_src,count 20,seconds 60;sid:1000044;)
+
+alert tcp any any -> 192.168.74.227 80 (msg:"flood web flow";flags:S;detection_filter:track by_src,count 20,seconds 60;sid:1000033;)
+
+:wq
+
+
+
+
+sudo snort -A console -i ens160 -c /etc/snort/snort.conf -l /var/log/snort/
+
+NOW TRY TO ATTACK FROM ATTACKER MACHINE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+NGINX
+
+NOTE: set iptables before (remove REJECT rule from FORWARD and add MASQUERADE in NAT POSTROUTING)
+
+Sudo setenforce 0
+
+Sudo apt install nginx
+Sudo systemctl status nginx
+
+Cd /etc/nginx/
+Sudo vim nginx.conf
+
+41     server {
+ 42         listen       80;
+ 43         #listen       [::]:80;
+ 44         #server_name  _;
+ 45         #root         /usr/share/nginx/html;
+
+
+
+
+
+
+
+# Load Balancer
+Accord Line 37 
+ upstream backend {
+          server 192.168.35.10;
+          server 192.168.25.20 weight 5;
+      }
+ 	location / {
+               	 	 proxy_pass http://backend/;
+         	}
+
+# for different pages
+Accord Line 58 for 
+
+              location / {
+               	 	 proxy_pass http://192.168.25.20/;
+         	}
+ 
+         location /cdac{
+                 	proxy_pass http://192.168.35.10/;
+         	}
+ 
+Browser:	192.168.74.227/
+Browser:	192.168.74.227/cdac
+
+Note: ON client web server should be run
+
+
+
+DMZ
+
+sudo iptables -L
+
+sudo iptables -t nat -L
+
+sudo iptables -t nat -A POSTROUTING -s 192.168.25.0/24 -o ens160 -j MASQUERADE
+ 
+ sudo iptables -t nat -A POSTROUTING -s 192.168.35.0/24 -o ens160 -j MASQUERADE 
+
+ cat /proc/sys/net/ipv4/ip_forward
+
+ sudo iptables -I FORWARD 1 -p udp -d 192.168.72.20 --dport=53 -j ACCEPT
+
+sudo iptables -I FORWARD 1 -p udp -s 192.168.72.20 --sport=53 -j ACCEPT
+
+  sudo iptables -N dmz_chain
+
+ sudo iptables -N lan_chain 
+
+ sudo iptables -I FORWARD 3 -j dmz_chain 
+
+sudo iptables -I FORWARD 4 -j lan_chain 
+
+sudo iptables -A dmz_chain -p tcp -s 192.168.35.0/24 -m conntrack --ctstate NEW -j ACCEPT
+
+sudo iptables -A dmz_chain -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+sudo iptables -A dmz_chain -j RETURN
+
+sudo iptables -A lan_chain -p tcp -s 192.168.25.0/24 -d www.google.com --dport=443 -m conntrack --ctstate NEW -j ACCEPT
+
+sudo iptables -A lan_chain -p tcp -s 192.168.25.0/24 -d www.cdac.in --dport=443 -m conntrack --ctstate NEW -j ACCEPT
+
+sudo iptables -A lan_chain -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+sudo iptables -A lan_chain -j RETURN
+
+
+
+
+
+sudo iptables -t nat -A PREROUTING -p tcp -i ens160 --dport=80 -j DNAT --to-destination 192.168.35.10:80 
+
+sudo iptables -I dmz_chain 3 -p tcp -d 192.168.35.10 --dport=80 -m conntrack --ctstate NEW -j ACCEPT
+
+
+Note: on machine 192.168.35.10, web server should be running
+Sudo apt/dnf install httpd/apache2
+Sudo vim /var/www/html/index.html
+
+Option1: sudo ufw allow 80
+Option2: sudo firewall-cmd --add-service=80 --permanent
+                 Sudo firewall-cmd --reload
+
+Browse 192.168.74.227- should show web page of server which in running on 192.168.35.10
+
+
+
+ipset
+Chai 
+
+ipset create chai hash:ip timeout 60
+iptables -I INPUT 1 -m set --match-set chai src -j DROP 
+iptables -I INPUT 2 -p icmp --icmp-type echo-request -j SET --add-set chai src 
+iptables -I INPUT 3 -p tcp --dport=22 -j SET --add-set chai src 
+iptables -I INPUT 4 -p tcp --dport=80 -j SET --add-set chai src 
+
+iptables -I INPUT 2 -p icmp --icmp-type echo-request -m length --length 156: -j SET --add-set chai src
+
+iptables -R INPUT 2 -p icmp --icmp-type echo-request -m limit --limit 10/s -j SET --add-set chai src
+
+
+# to check ip 
+ipset -L
+
+#delete ip from set 
+iptables -D INPUT 1
+
+iptables destroy chai
+
+iptales_________
+
+iptables -N cdac
+iptables -A cdac -p udp -s 25.0 -d 72.20 --dport 53 -j ACCEPT
+iptables -A cdac -p udp -d 25.0 -s 72.20 --sport 53 -j ACCEPT
+iptables -A cdac -p tcp -m conntrack established, related -j accept
+CLIENT1________
+
+iptables -A cdac -p tcp -s 25.10 
+________________________________________________________________________________________________________________________________________________________________________________
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+https://github.com/GURUJI-REDHAT/rabbit.git
+
+ipset icmp/ssh/http block :
+iptables -I INPUT 1 -m set --match-set batman src -j DROP 
+iptables -I INPUT 2 -p icmp --icmp-type=echo-request -j SET --add-set batman src
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Iptables :-
+
+DMZ
+
+sudo iptables -L
+
+sudo iptables -t nat -L
+
+sudo iptables -t nat -A POSTROUTING -s 192.168.25.0/24 -o ens160 -j MASQUERADE
+ 
+ sudo iptables -t nat -A POSTROUTING -s 192.168.35.0/24 -o ens160 -j MASQUERADE 
+
+`````````````````````````````````````````````````````````````````````````````````
+
+Enable Forwarding :-
+
+ cat /proc/sys/net/ipv4/ip_forward
+
+sudo iptables -I FORWARD 1 -p udp -d 192.168.72.20 --dport=53 -j ACCEPT
+
+sudo iptables -I FORWARD 1 -p udp -s 192.168.72.20 --sport=53 -j ACCEPT
+
+
+`````````````````````````````````````````````````````````````````````````````````
+New chain for DMZ , Private :-
+
+  sudo iptables -N dmz_chain
+
+ sudo iptables -N lan_chain 
+
+ sudo iptables -I FORWARD 3 -j dmz_chain 
+
+sudo iptables -I FORWARD 4 -j lan_chain 
+
+sudo iptables -A dmz_chain -p tcp -s 192.168.35.0/24 -m conntrack --ctstate NEW -j ACCEPT
+
+sudo iptables -A dmz_chain -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+sudo iptables -A dmz_chain -j RETURN
+
+sudo iptables -A lan_chain -p tcp -s 192.168.25.0/24 -d www.google.com --dport=443 -m conntrack --ctstate NEW -j ACCEPT
+
+sudo iptables -A lan_chain -p tcp -s 192.168.25.0/24 -d www.cdac.in --dport=443 -m conntrack --ctstate NEW -j ACCEPT
+
+sudo iptables -A lan_chain -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+sudo iptables -A lan_chain -j RETURN
+
+
+
+````````````````````````````````````````````````````````````````````````````````````````````````````````
+Port Forwarding For Website Access :-
+
+sudo iptables -t nat -A PREROUTING -p tcp -i ens160 --dport=80 -j DNAT --to-destination 192.168.35.10:80 
+
+sudo iptables -I dmz_chain 3 -p tcp -d 192.168.35.10 --dport=80 -m conntrack --ctstate NEW -j ACCEPT
+
+
+Note: on machine 192.168.35.10, web server should be running
+Sudo apt/dnf install httpd/apache2
+Sudo vim /var/www/html/index.html
+
+Option1: sudo ufw allow 80
+Option2: sudo firewall-cmd --add-service=80 --permanent
+                 Sudo firewall-cmd --reload
+
+Browse 192.168.74.227- should show web page of server which in running on 192.168.35.10
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+Ipset :-
+
+Chai 
+
+ipset create chai hash:ip timeout 60
+iptables -I INPUT 1 -m set --match-set chai src -j DROP 
+iptables -I INPUT 2 -p icmp --icmp-type echo-request -j SET --add-set chai src 
+iptables -I INPUT 3 -p tcp --dport=22 -j SET --add-set chai src 
+iptables -I INPUT 4 -p tcp --dport=80 -j SET --add-set chai src 
+
+iptables -I INPUT 2 -p icmp --icmp-type echo-request -m length --length 156: -j SET --add-set chai src
+
+iptables -R INPUT 2 -p icmp --icmp-type echo-request -m limit --limit 10/s -j SET --add-set chai src
+
+ipset del chai 192.168.74.74
+
+iptables -D INPUT 1
+iptables destroy chai
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Snort :-
+
+Cd  /etc/snort
+Sudo vim snort.conf
+ --> 	ipvar HOME_NET 192.168.35.0/24
+ --> 	ipvar EXTERNAL_NET !$HOME_NET
+ -->	var RULE_PATH /etc/snort/rules
+ -->	var SO_RULE_PATH /etc/snort/so_rules
+ -->	var PREPROC_RULE_PATH /etc/snort/preproc_rules
+ -->	var WHITE_LIST_PATH /etc/snort/rules
+ -->	var BLACK_LIST_PATH /etc/snort/rules
+
+(make sure to enable this in file)
+
+Cd  /etc/snort/rules
+Sudo vim local.rules
+
+alert icmp any any -> any any (msg:"Test ping";sid:1000013;)
+alert udp any any -> any 53 (msg:”LAN searching facebook”;content:”facebook”;nocase;sid:952145;)
+alert tcp $EXTERNAL_NET any -> 192.168.74.227 22 (msg:"Test SSH";sid:1000003;)
+alert icmp any any -> 192.168.74.227 any (msg:"Test big_data ping";dsize:>128;sid:1000004;)
+alert icmp any any -> 192.168.74.227 any (msg:"Ping of Death";detection_filter:track by_src,count 20,seconds 60;sid:1000044;)
+alert tcp any any -> 192.168.74.227 80 (msg:"flood web flow";flags:S;detection_filter:track by_src,count 20,seconds 60;sid:1000033;)
+
+for logs :-
+sudo snort -A console -i ens160 -c /etc/snort/snort.conf -l /var/log/snort/
+				(OR)
+sudo cat /var/log/snort/alert.fast
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+NGINX
+
+NOTE: set iptables before (remove REJECT rule from FORWARD and add MASQUERADE in NAT POSTROUTING)
+
+Sudo setenforce 0
+
+Sudo apt install nginx
+Sudo systemctl status nginx
+
+Cd /etc/nginx/
+Sudo vim nginx.conf
+
+ 41     server {
+ 42         listen       80;
+ 43         #listen       [::]:80;
+ 44         #server_name  _;
+ 45         #root         /usr/share/nginx/html;
+
+
+
+
+# Load Balancer
+Accord Line 37 
+ upstream backend {
+          server 192.168.35.10;
+          server 192.168.25.20 weight 5;
+      }
+ 	location / {
+               	 	 proxy_pass http://backend/;
+         	}
+
+# for different pages
+Accord Line 58 for 
+
+              location / {
+               	 	 proxy_pass http://192.168.25.20/;
+         	}
+ 
+         location /cdac{
+                 	proxy_pass http://192.168.35.10/;
+         	}
+ 
+Browser:	192.168.74.227/
+Browser:	192.168.74.227/cdac
+
+Note: ON client web server should be run
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+nginx Loadbalancing + Reverse Proxy :-
+
+Cd /etc/nginx/
+Sudo vim nginx.conf
+
+ Loadbalancing
+
+ 36     include /etc/nginx/conf.d/*.conf;
+ 37     upstream backend {
+ 38         server 192.168.25.10;
+ 39         server 192.168.25.20;
+ 40     }
+ 41     server {
+ 42         listen       80;
+ 43 #        listen       [::]:80;
+ 44 #        server_name  _;
+ 45 #        root         /usr/share/nginx/html;
+ 46 
+ 47         # Load configuration files for the default server block.
+ 48         include /etc/nginx/default.d/*.conf;
+ 49 
+ 50         error_page 404 /404.html;
+ 51         location = /404.html {
+ 52         }
+ 53         location = / {
+ 54                 proxy_pass http://backend/;
+ 55         }
+ 56         location = /cdac {
+ 57                 proxy_pass http://192.168.25.10/;
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Fail2ban
+
+Machine a :
+
+1. Install + start + enable 
+sudo yum install epel-release -y
+sudo yum install fail2ban -y
+sudo systemctl status fail2ban
+cd /etc/fail2ban/
+ ls
+ sudo cp jail.conf jail.local 
+ cd jail.d/
+  ls
+ sudo vim sshd.local
+
+[sshd]
+enabled=true
+maxretry=5
+bantime=1h
+findtime=3m
+bantime.increment=true
+bantime.factor=2
+
+
+sudo fail2ban-client status
+ sudo systemctl restart fail2ban
+
+On other machine:
+ 
+Ping machine a
+
+Machine a: 
+
+ hostname -I
+ sudo fail2ban-client status sshd
+ sudo fail2ban-client get sshd banip
+ sudo fail2ban-client get sshd banip --with-time
+
+
+
+--------------------------------------------------------------------------------------------------------------------
+fail2ban commands history 
+sudo apt-get install fail2ban -y
+  831  cd /etc/fail2ban/
+  832  ls
+  833  sudo cp jail.conf jail.local
+  834  ls
+  835  cd jail.d/
+  836  ls
+  837  sudo vim banip.local
+  838  sudo systemctl reload fail2ban
+  839  sudo systemctl start fail2ban
+  840  sudo systemctl enable fail2ban
+  841  fail2ban-client status
+  842  sudo fail2ban-client status
+  843  sudo fail2ban-client status sshd
+  844  ip -br a
+  
+------------------------------------------------------------------------------------------------------------------------------
+NAGIOS :-
+
+  On server
+sudo apt update
+ 
+----------------------------------------------------------------------------------------------------------------------------
+
+sudo apt install nagios4 monitoring-plugins nagios-nrpe-plugin apache2 -y
+
+sudo systemctl enable nagios4
+sudo systemctl start nagios4
+sudo systemctl enable apache2
+sudo systemctl start apache2
+sudo systemctl status nagios4
+sudo systemctl status apache2
+
+sudo htpasswd -c /etc/nagios4/htdigest.users nagiosadmin
+
+Enter a password when prompted. Then restart Apache:
+sudo systemctl restart apache2
+Open the dashboard in browser:
+http://<server ip>/nagios4
+
+------------------------------------------------------------------------
+On client
+``````````
+sudo apt update
+sudo apt install nagios-nrpe-server monitoring-plugins -y
+
+sudo nano /etc/nagios/nrpe.cfg
+	allowed_hosts=127.0.0.1,<server ip>
+
+sudo systemctl restart nagios-nrpe-server
+sudo systemctl enable nagios-nrpe-server
+sudo systemctl status nagios-nrpe-server
+
+On server
+`````````
+/usr/lib/nagios/plugins/check_nrpe -H <client ip>
+
+sudo nano /etc/nagios4/conf.d/client1.cfg
+
+	define host {
+		use			generic-host
+		host_name		client1 
+		alias			Ubuntu Client
+		address			<client ip>
+		max_check_attempts	3
+		contact_groups		admins	
+	}
+
+
+	define service {
+ 		use                     generic-service
+   		host_name               client1
+    		service_description     HTTP Service
+    		check_command           check_http
+	}
+	
+	define service {
+    		use                     generic-service
+    		host_name               client1
+    		service_description     CPU Load
+    		check_command           check_nrpe!check_load
+	}
+
+	define service {
+ 		use                     generic-service
+    		host_name               client1
+    		service_description     HTTPS Service
+    		check_command           check_https
+	}
+
+	
+But first, check if check_https command exists:
+
+grep -R "check_https" /etc/nagios4/
+
+If it does not exist, add this command on Nagios Server:
+
+sudo nano /etc/nagios4/conf.d/commands.cfg
+
+Add:
+
+define command {
+    command_name    check_https
+    command_line    /usr/lib/nagios/plugins/check_http -H '$HOSTADDRESS$' -S
+}
+
+
+to check
+````````
+sudo nagios4 -v /etc/nagios4/nagios.cfg
+sudo systemctl restart nagios4
+  845  sudo fail2ban-client status sshd
+
+ 
